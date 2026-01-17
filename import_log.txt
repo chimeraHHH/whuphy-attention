@@ -1,0 +1,10 @@
+Import Report
+================================
+Total records processed: 17364
+Successfully imported: 10985
+Skipped: 6379
+  - Not Converged: 4551
+  - No Formation Energy (eform): 1828
+  - Decode Errors: 0
+
+Output file: imp2d_data.json
