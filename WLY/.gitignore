@@ -1,6 +1,7 @@
 # Ignore large data files
 *.db
 *.json
+!orbital_electrons.json
 
 # Ignore python cache
 __pycache__/
