@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Distribution / Builds
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Database
+*.db
+*.sqlite3
+
+# Logs and Run Output
+runs_*/
+*.log
+
+# Data
+data/
