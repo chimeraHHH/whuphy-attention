@@ -1,0 +1,13 @@
+# Ignore large data files
+*.db
+*.json
+
+# Ignore python cache
+__pycache__/
+*.pyc
+
+# Ignore system files
+.DS_Store
+
+# Ignore generated plots (optional, keeping them for now based on user request "report")
+# *.png
