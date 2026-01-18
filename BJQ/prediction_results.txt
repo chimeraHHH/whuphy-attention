@@ -1,0 +1,5 @@
+Pred: 19.8914, Actual: 17.9646
+Pred: 1.4392, Actual: 4.8014
+Pred: 7.4274, Actual: 20.1566
+Pred: 7.8368, Actual: 2.0897
+Pred: 3.2473, Actual: 6.0434
