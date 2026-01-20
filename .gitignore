@@ -1,8 +1,7 @@
-.DS_Store
 __pycache__/
 *.pyc
-
-# Ignored PDFs
-BJQ/2026年大学生创新创业训练计划项目申报书12.18.pdf
-BJQ/matformer论文.pdf
-BJQ/wu-et-al-2025-graph-transformer-model-integrating-physical-features-for-projected-electronic-density-of-states.pdf
+.DS_Store
+.trae/
+WLY/final_dataset.pkl
+WLY/processed_dataset_with_graphs.pkl
+WLY/cleaned_dataset.pkl
