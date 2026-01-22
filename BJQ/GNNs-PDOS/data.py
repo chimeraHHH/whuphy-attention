@@ -127,6 +127,31 @@ class CIFData(Dataset):
         
         return G
 
+    def get_defect_info(self, structure, mp_id):
+        """
+        [New Feature] Retrieve or calculate defect information.
+        
+        Args:
+            structure: pymatgen Structure object
+            mp_id: Material ID
+            
+        Returns:
+            has_defect (bool): Whether this sample has a defect
+            defect_coords (list/array): [x, y, z] coordinates of the vacancy/defect center
+            defect_type (int): An integer representing the defect type (0 for no defect)
+        """
+        # --- TODO: CUSTOMIZE THIS LOGIC BASED ON YOUR DATASET ---
+        # Example logic:
+        # if "vacancy" in mp_id:
+        #     return True, [0.5, 0.5, 0.5], 1
+        
+        # Current Default: Assume NO defect (Standard MP data)
+        has_defect = False
+        defect_coords = [0.0, 0.0, 0.0] # Dummy coordinates
+        defect_type = 0
+        
+        return has_defect, defect_coords, defect_type
+
     def load_data_single(self, mp_id):
 
         crystal = self.load_structure_from_cif(self.structures_folder, mp_id + '.cif')
@@ -206,14 +231,41 @@ class CIFData(Dataset):
         pdos = torch.Tensor(pdos)
         pdos = pdos.unsqueeze(dim=0)
         p_band_center = torch.Tensor([p_band_center])
-        p_band_center = p_band_center.unsqueeze(dim=0)        
-        #print(f"Atom feature shape: {atom_fea.shape}")
-        #print(f"Edge index shape: {edge_index.shape}")
-        #print(f"space_group_number shape: {space_group_number.shape}")
-        #print(f"space_group_number: {space_group_number}")
+        p_band_center = p_band_center.unsqueeze(dim=0)
+        
+        # --- [New Feature] Vacancy Info Processing ---
+        has_defect, defect_coords, defect_type = self.get_defect_info(crystal, mp_id)
+        
+        if has_defect:
+            # Calculate distance from each atom to the defect center
+            # crystal.cart_coords: [N, 3]
+            # defect_coords: [3]
+            atom_coords = torch.tensor(crystal.cart_coords, dtype=torch.float32)
+            d_coords = torch.tensor(defect_coords, dtype=torch.float32).unsqueeze(0)
+            
+            # Simple Euclidean distance (Consider PBC if necessary, but for local defects simple dist often suffices if centered)
+            # For strict PBC, use crystal.lattice.get_distance_and_image()
+            vacancy_dists = torch.norm(atom_coords - d_coords, dim=1) # [N]
+        else:
+            # If no defect, set distances to a large value (outside RBF range) so they encode to 0
+            # Our RBF max is 15.0, so 100.0 is safe.
+            vacancy_dists = torch.ones(len(crystal), dtype=torch.float32) * 100.0
+            
+        vacancy_type = torch.tensor([defect_type], dtype=torch.long)
+        # ---------------------------------------------
         
         # Create the Data object for torch_geometric
-        data = Data(mp_id=mp_id, x=atom_fea, edge_index=edge_index, edge_attr=edge_attr, energies = energies, space_group_number = space_group_number, p_band_center = p_band_center, y=pdos, elec_conf = elec_conf, orbital_counts = orbital_counts)
+        # Placeholder for formation_energy and band_gap - will be populated from external DB if available
+        # Defaulting to 0.0 for now, should be updated in a post-processing step or data loader wrapper
+        formation_energy = torch.tensor([0.0]) 
+        band_gap = torch.tensor([0.0])
+
+        data = Data(mp_id=mp_id, x=atom_fea, edge_index=edge_index, edge_attr=edge_attr, 
+                    energies = energies, space_group_number = space_group_number, 
+                    p_band_center = p_band_center, y=pdos, 
+                    elec_conf = elec_conf, orbital_counts = orbital_counts,
+                    formation_energy=formation_energy, band_gap=band_gap,
+                    vacancy_dists=vacancy_dists, vacancy_type=vacancy_type) # Added new fields
 
         return data
 
