@@ -12,3 +12,9 @@ __pycache__/
 
 # Ignore generated plots (optional, keeping them for now based on user request "report")
 # *.png
+
+# Ignore local artifacts
+dataset_imp2d.tar.gz
+checkpoints_local/
+checkpoints_hpc_test/
+slurm-*.out

@@ -12,7 +12,7 @@ class CrystalGraphDataset(Dataset):
             feature_path (str): Path to the atom_features.pth file.
             device (str): Device to put tensors on ('cpu' or 'cuda').
         """
-        self.device = device
+        self.device = "cpu"
         
         # 1. Load Dataset
         # Note: We use the processed dataset which contains graph information
@@ -38,7 +38,7 @@ class CrystalGraphDataset(Dataset):
             raise FileNotFoundError(f"Atom features not found at {feature_path}")
             
         print(f"Loading atom features from {feature_path}...")
-        self.atom_features = torch.load(feature_path, map_location='cpu').to(self.device) # (101, 9)
+        self.atom_features = torch.load(feature_path, map_location="cpu", weights_only=True)  # (101, 9)
         
     def __len__(self):
         return len(self.data)
@@ -85,32 +85,32 @@ class CrystalGraphDataset(Dataset):
         
         # --- 1. Atom Features ---
         # Get atomic numbers (integers)
-        numbers = torch.tensor(sample['numbers'], dtype=torch.long, device=self.device)
+        numbers = torch.tensor(sample['numbers'], dtype=torch.long)
         # Lookup features from the table
         # atom_features is (101, 9), numbers are indices 0-100
         x = self.atom_features[numbers] # (N, 9)
         
         # --- 2. Graph Data ---
         # edge_index: (2, E) -> LongTensor
-        edge_index = torch.tensor(sample['edge_index'], dtype=torch.long, device=self.device)
+        edge_index = torch.tensor(sample['edge_index'], dtype=torch.long)
         
         # edge_dist: (E,) -> FloatTensor
-        edge_dist = torch.tensor(sample['edge_dist'], dtype=torch.float32, device=self.device)
+        edge_dist = torch.tensor(sample['edge_dist'], dtype=torch.float32)
         
         # triplet_index: (M, 3) -> LongTensor
-        triplet_index = torch.tensor(sample['triplet_index'], dtype=torch.long, device=self.device)
+        triplet_index = torch.tensor(sample['triplet_index'], dtype=torch.long)
         
         # angles: (M,) -> FloatTensor
-        angles = torch.tensor(sample['angles'], dtype=torch.float32, device=self.device)
+        angles = torch.tensor(sample['angles'], dtype=torch.float32)
         
         # --- 3. Distance Matrix (PBC) ---
-        positions = torch.tensor(sample['positions'], dtype=torch.float32, device=self.device)
-        cell = torch.tensor(sample['cell'], dtype=torch.float32, device=self.device)
+        positions = torch.tensor(sample['positions'], dtype=torch.float32)
+        cell = torch.tensor(sample['cell'], dtype=torch.float32)
         
         dist_matrix = self.compute_pbc_distance_matrix(positions, cell) # (N, N)
         
         # --- 4. Target ---
-        target = torch.tensor(sample['target'], dtype=torch.float32, device=self.device)
+        target = torch.tensor(sample['target'], dtype=torch.float32)
         
         return {
             'x': x,

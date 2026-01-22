@@ -12,6 +12,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from WLY.data_loader import CrystalGraphDataset, collate_fn
 from WLY.model import CrystalTransformer
 
+def move_to_device(obj, device, non_blocking=False):
+    if torch.is_tensor(obj):
+        return obj.to(device, non_blocking=non_blocking)
+    if isinstance(obj, dict):
+        return {k: move_to_device(v, device, non_blocking=non_blocking) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        converted = [move_to_device(v, device, non_blocking=non_blocking) for v in obj]
+        return type(obj)(converted)
+    return obj
+
 class Normalizer:
     def __init__(self, tensor):
         self.mean = torch.mean(tensor)
@@ -25,8 +35,9 @@ class Normalizer:
 
 def train_one_epoch():
     # --- Config ---
-    DATA_PATH = '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/final_dataset.pkl'
-    FEATURE_PATH = '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/atom_features.pth'
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    DATA_PATH = os.path.join(base_dir, "final_dataset.pkl")
+    FEATURE_PATH = os.path.join(base_dir, "atom_features.pth")
     
     BATCH_SIZE = 32
     LEARNING_RATE = 1e-3
@@ -36,7 +47,7 @@ def train_one_epoch():
     
     # --- Data Preparation ---
     print("Initializing dataset...")
-    full_dataset = CrystalGraphDataset(DATA_PATH, FEATURE_PATH, device=DEVICE)
+    full_dataset = CrystalGraphDataset(DATA_PATH, FEATURE_PATH, device="cpu")
     
     # Calculate Normalization Stats on FULL dataset (target)
     # We collect all targets first
@@ -47,7 +58,7 @@ def train_one_epoch():
     
     # For this quick test, we only use a small subset (enough for 2 batches)
     # 2 batches * 32 = 64 samples
-    subset_indices = range(64)
+    subset_indices = range(min(64, len(full_dataset)))
     small_dataset = Subset(full_dataset, subset_indices)
     
     loader = DataLoader(
@@ -77,6 +88,7 @@ def train_one_epoch():
     total_loss = 0
     
     for i, batch in enumerate(loader):
+        batch = move_to_device(batch, DEVICE, non_blocking=(DEVICE == "cuda"))
         # Forward
         preds = model(batch)
         targets = batch['target']

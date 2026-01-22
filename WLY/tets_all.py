@@ -4,71 +4,103 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, random_split
 import os
 import sys
+import argparse
 
-# 导入你的模型和数据类
-from data_loader import CrystalGraphDataset, collate_fn
-from model import CrystalTransformer
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from WLY.data_loader import CrystalGraphDataset, collate_fn
+from WLY.model import CrystalTransformer
+
+def move_to_device(obj, device, non_blocking=False):
+    if torch.is_tensor(obj):
+        return obj.to(device, non_blocking=non_blocking)
+    if isinstance(obj, dict):
+        return {k: move_to_device(v, device, non_blocking=non_blocking) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        converted = [move_to_device(v, device, non_blocking=non_blocking) for v in obj]
+        return type(obj)(converted)
+    return obj
 
 def test_on_full_dataset():
-    # --- 1. 手动指定关键配置 (必须与 train.py 一致) ---
-    CONFIG = {
-        'data_path': '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/final_dataset.pkl',
-        'feature_path': '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/atom_features.pth',
-        'checkpoint': '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/checkpoints/best_model.pth',
-        'hidden_dim': 64,
-        'n_local': 2,
-        'n_global': 1,
-        'seed': 42
-    }
-    
-    device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ckpt", default=os.path.join(base_dir, "checkpoints", "latest_model.pth"))
+    parser.add_argument("--data", default=None)
+    parser.add_argument("--features", default=None)
+    parser.add_argument("--batch_size", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--plot_path", default=os.path.join(base_dir, "test_result_plot.png"))
+    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--top_k", type=int, default=10)
+    parser.add_argument("--num_workers", type=int, default=0)
+    parser.add_argument("--pin_memory", action="store_true")
+    args = parser.parse_args()
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     print(f"Using device: {device}")
 
-    # --- 2. 加载全量数据集 ---
+    print(f"Loading checkpoint: {args.ckpt}")
+    checkpoint = torch.load(args.ckpt, map_location=device)
+
+    config = checkpoint.get("config", {})
+    data_path = args.data or config.get("data_path") or os.path.join(base_dir, "final_dataset.pkl")
+    feature_path = args.features or config.get("feature_path") or os.path.join(base_dir, "atom_features.pth")
+    batch_size = args.batch_size or config.get("batch_size") or 16
+    seed = args.seed or config.get("seed") or 42
+
     print("Loading dataset...")
-    full_dataset = CrystalGraphDataset(CONFIG['data_path'], CONFIG['feature_path'], device=device)
+    full_dataset = CrystalGraphDataset(data_path, feature_path, device="cpu")
     
-    # 模拟 train.py 的划分逻辑，确保我们拿到的 test_set 和训练时是一样的
     total_size = len(full_dataset)
     train_size = int(0.8 * total_size)
     val_size = int(0.1 * total_size)
     test_size = total_size - train_size - val_size
     
-    # 使用相同的随机种子进行划分
-    torch.manual_seed(CONFIG['seed'])
-    _, _, test_set = random_split(full_dataset, [train_size, val_size, test_size])
+    gen = torch.Generator().manual_seed(seed)
+    _, _, test_set = random_split(full_dataset, [train_size, val_size, test_size], generator=gen)
     
-    test_loader = DataLoader(test_set, batch_size=16, shuffle=False, collate_fn=collate_fn)
+    test_loader = DataLoader(
+        test_set,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=(args.pin_memory or device.type == "cuda"),
+        collate_fn=collate_fn,
+        drop_last=False,
+    )
 
-    # --- 3. 获取 Normalizer 信息 ---
-    # 我们需要从 best_model.pth 中读取训练时的 Mean 和 Std，否则预测值会完全错掉
-    print(f"Loading checkpoint: {CONFIG['checkpoint']}")
-    checkpoint = torch.load(CONFIG['checkpoint'], map_location=device)
-    
     norm_mean = checkpoint['normalizer']['mean']
     norm_std = checkpoint['normalizer']['std']
     print(f"Loaded Normalizer: Mean={norm_mean:.4f}, Std={norm_std:.4f}")
 
-    # --- 4. 初始化模型并加载权重 ---
+    hidden_dim = config.get("hidden_dim", 64)
+    n_local = config.get("n_local", 2)
+    n_global = config.get("n_global", 1)
+
     model = CrystalTransformer(
         atom_fea_len=9,
-        hidden_dim=CONFIG['hidden_dim'],
-        n_local_layers=CONFIG['n_local'],
-        n_global_layers=CONFIG['n_global']
+        hidden_dim=hidden_dim,
+        n_local_layers=n_local,
+        n_global_layers=n_global,
     ).to(device)
     
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
 
-    # --- 5. 开始推理 ---
     all_preds = []
     all_reals = []
 
     print(f"Starting inference on {len(test_set)} samples...")
     with torch.no_grad():
         for batch in test_loader:
+            batch = move_to_device(batch, device, non_blocking=(device.type == "cuda"))
             preds_norm = model(batch)
-            targets = batch['target']
+            targets = batch["target"]
             
             # 反标准化：还原真实物理单位 (eV)
             preds_denorm = preds_norm * norm_std + norm_mean
@@ -79,7 +111,6 @@ def test_on_full_dataset():
     all_preds = np.array(all_preds)
     all_reals = np.array(all_reals)
 
-    # --- 6. 计算指标 ---
     mae = np.mean(np.abs(all_preds - all_reals))
     rmse = np.sqrt(np.mean((all_preds - all_reals)**2))
     
@@ -88,7 +119,6 @@ def test_on_full_dataset():
     print(f"Final Test RMSE: {rmse:.4f} eV")
     print("="*30)
 
-    # --- 7. 绘制散点图 (Parity Plot) ---
     plt.figure(figsize=(8, 8))
     plt.scatter(all_reals, all_preds, alpha=0.6, edgecolors='w', label=f'Model Predictions')
     
@@ -103,21 +133,15 @@ def test_on_full_dataset():
     plt.legend()
     plt.grid(True, alpha=0.3)
     
-    # 保存结果图
-    save_path = '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/test_result_plot.png'
-    plt.savefig(save_path)
-    print(f"\nPlot saved to: {save_path}")
-    plt.show()
-    # ... 前面的推理代码保持不变 ...
-    all_preds = np.array(all_preds)
-    all_reals = np.array(all_reals)
+    plt.savefig(args.plot_path)
+    print(f"\nPlot saved to: {args.plot_path}")
+    if args.show:
+        plt.show()
+    plt.close()
 
-    # 1. 计算每个样本的绝对误差
     errors = np.abs(all_preds - all_reals)
 
-    # 2. 获取误差最大的前 10 个样本的索引
-    # argsort 会按从小到大排，我们取最后 10 个并翻转
-    top_k = 10
+    top_k = min(args.top_k, len(errors))
     worst_idx = np.argsort(errors)[-top_k:][::-1]
 
     print(f"\n======== 误差最大的前 {top_k} 个样本分析 ========")

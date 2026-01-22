@@ -4,21 +4,15 @@ import os
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from tqdm import tqdm
+import argparse
 
-# 配置路径
-DATASET_PATH = '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/cleaned_dataset.pkl'
-OUTPUT_PATH = '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/processed_dataset_with_graphs.pkl'
-
-# 参数设置
-CUTOFF_RADIUS = 5.0 # 邻居搜索半径 (Å)
-
-def process_graphs():
-    if not os.path.exists(DATASET_PATH):
-        print(f"Error: Dataset not found at {DATASET_PATH}")
+def process_graphs(dataset_path, output_path, cutoff_radius):
+    if not os.path.exists(dataset_path):
+        print(f"Error: Dataset not found at {dataset_path}")
         return
 
-    print(f"Loading dataset from {DATASET_PATH}...")
-    with open(DATASET_PATH, 'rb') as f:
+    print(f"Loading dataset from {dataset_path}...")
+    with open(dataset_path, 'rb') as f:
         raw_data = pickle.load(f)
     
     processed_data = []
@@ -39,7 +33,7 @@ def process_graphs():
             # i, j: 原子索引
             # d: 标量距离
             # D: 矢量距离 (经过 PBC 修正)
-            idx_i, idx_j, d_ij, D_ij = neighbor_list('ijdD', atoms, cutoff=CUTOFF_RADIUS)
+            idx_i, idx_j, d_ij, D_ij = neighbor_list('ijdD', atoms, cutoff=cutoff_radius)
             
             # 3. 存储边信息 (Edges)
             # edge_index: (2, E) -> [source, target]
@@ -149,9 +143,9 @@ def process_graphs():
     # 保存结果
     print("-" * 30)
     print(f"Processed {len(processed_data)} samples successfully.")
-    print(f"Saving to {OUTPUT_PATH}...")
+    print(f"Saving to {output_path}...")
     
-    with open(OUTPUT_PATH, 'wb') as f:
+    with open(output_path, 'wb') as f:
         pickle.dump(processed_data, f)
     
     print("Done!")
@@ -166,4 +160,10 @@ def process_graphs():
         print(f"Angles shape: {s['angles'].shape}")
 
 if __name__ == "__main__":
-    process_graphs()
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", default=os.path.join(base_dir, "cleaned_dataset.pkl"))
+    parser.add_argument("--output", default=os.path.join(base_dir, "processed_dataset_with_graphs.pkl"))
+    parser.add_argument("--cutoff", type=float, default=5.0)
+    args = parser.parse_args()
+    process_graphs(args.input, args.output, args.cutoff)
