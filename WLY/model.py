@@ -165,7 +165,7 @@ class GeometricTransformerBlock(nn.Module):
             # mask: (B, N) -> (B, 1, 1, N) broadcastable
             mask_expanded = mask.unsqueeze(1).unsqueeze(2) # (B, 1, 1, N) target dim
             # We want to mask out attention to padding tokens (keys)
-            scores = scores.masked_fill(~mask_expanded, float('-1e9'))
+            scores = scores.masked_fill(~mask_expanded, torch.finfo(scores.dtype).min)
             
         attn = F.softmax(scores, dim=-1)
         
