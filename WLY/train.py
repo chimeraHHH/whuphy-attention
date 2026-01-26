@@ -192,7 +192,9 @@ def main():
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     criterion = nn.MSELoss()
     amp_enabled = bool(CONFIG["fp16"]) and (device.type == "cuda")
-    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
+    use_bf16 = amp_enabled and torch.cuda.is_bf16_supported()
+    autocast_dtype = torch.bfloat16 if use_bf16 else torch.float16
+    scaler = torch.amp.GradScaler("cuda", enabled=(amp_enabled and (not use_bf16)))
     
     start_epoch = 0
     best_val_mae = float('inf')
@@ -233,19 +235,24 @@ def main():
             targets = batch["target"]
             
             targets_norm = normalizer.norm(targets)
-            with torch.amp.autocast(device_type="cuda", enabled=amp_enabled):
+            with torch.amp.autocast(device_type="cuda", enabled=amp_enabled, dtype=autocast_dtype):
                 preds = model(batch)
                 loss = criterion(preds, targets_norm)
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            scaler.step(optimizer)
-            scaler.update()
+            if scaler.is_enabled():
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
             
             batch_loss = loss.item()
             train_loss_sum += batch_loss * targets.size(0)
             with torch.no_grad():
-                preds_denorm = normalizer.denorm(preds)
+                preds_denorm = normalizer.denorm(preds.float())
                 mae = torch.abs(preds_denorm - targets).mean().item()
                 train_mae_sum += mae * targets.size(0)
             
@@ -272,11 +279,12 @@ def main():
                 batch = move_to_device(batch, device, non_blocking=pin_memory)
                 targets = batch["target"]
                 targets_norm = normalizer.norm(targets)
-                preds = model(batch)
+                with torch.amp.autocast(device_type="cuda", enabled=amp_enabled, dtype=autocast_dtype):
+                    preds = model(batch)
                 loss = criterion(preds, targets_norm)
                 val_loss_sum += loss.item() * targets.size(0)
                 
-                preds_denorm = normalizer.denorm(preds)
+                preds_denorm = normalizer.denorm(preds.float())
                 mae = torch.abs(preds_denorm - targets).mean().item()
                 val_mae_sum += mae * targets.size(0)
 
