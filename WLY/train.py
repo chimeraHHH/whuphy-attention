@@ -97,8 +97,7 @@ def main():
         "fp16": args.fp16,
     }
     
-    if not os.path.exists(CONFIG['output_dir']):
-        os.makedirs(CONFIG['output_dir'])
+    os.makedirs(CONFIG["output_dir"], exist_ok=True)
 
     distributed = CONFIG["distributed"] or is_distributed()
     rank = 0
