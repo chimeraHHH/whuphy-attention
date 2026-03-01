@@ -1,10 +1,11 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, Subset
 import os
 import sys
 import argparse
+import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -21,6 +22,22 @@ def move_to_device(obj, device, non_blocking=False):
         return type(obj)(converted)
     return obj
 
+
+def load_test_indices(split_dir: str, total_size: int):
+    test_path = os.path.join(split_dir, "test_indices.json")
+    if not os.path.exists(test_path):
+        raise FileNotFoundError(f"Missing split file: {test_path}")
+    with open(test_path, "r", encoding="utf-8") as f:
+        test_indices = [int(x) for x in json.load(f)]
+
+    if len(set(test_indices)) != len(test_indices):
+        raise ValueError(f"Duplicate indices found in {test_path}")
+    if any((idx < 0 or idx >= total_size) for idx in test_indices):
+        raise ValueError(
+            f"Out-of-range test index found in {test_path} (dataset size={total_size})"
+        )
+    return test_indices
+
 def test_on_full_dataset():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser()
@@ -34,6 +51,16 @@ def test_on_full_dataset():
     parser.add_argument("--top_k", type=int, default=10)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--pin_memory", action="store_true")
+    parser.add_argument(
+        "--split_dir",
+        default=None,
+        help="Directory containing test_indices.json for locked split evaluation",
+    )
+    parser.add_argument(
+        "--metrics_out",
+        default=None,
+        help="Optional path to write metrics JSON",
+    )
     args = parser.parse_args()
 
     if torch.cuda.is_available():
@@ -57,12 +84,22 @@ def test_on_full_dataset():
     full_dataset = CrystalGraphDataset(data_path, feature_path, device="cpu")
     
     total_size = len(full_dataset)
-    train_size = int(0.8 * total_size)
-    val_size = int(0.1 * total_size)
-    test_size = total_size - train_size - val_size
-    
-    gen = torch.Generator().manual_seed(seed)
-    _, _, test_set = random_split(full_dataset, [train_size, val_size, test_size], generator=gen)
+    if args.split_dir:
+        test_indices = load_test_indices(args.split_dir, total_size)
+        test_set = Subset(full_dataset, test_indices)
+        print(
+            f"Using locked test split from {args.split_dir} "
+            f"(test={len(test_set)})"
+        )
+    else:
+        train_size = int(0.8 * total_size)
+        val_size = int(0.1 * total_size)
+        test_size = total_size - train_size - val_size
+        gen = torch.Generator().manual_seed(seed)
+        _, _, test_set = random_split(
+            full_dataset, [train_size, val_size, test_size], generator=gen
+        )
+        print(f"Using random test split by seed={seed} (test={len(test_set)})")
     
     test_loader = DataLoader(
         test_set,
@@ -113,11 +150,31 @@ def test_on_full_dataset():
 
     mae = np.mean(np.abs(all_preds - all_reals))
     rmse = np.sqrt(np.mean((all_preds - all_reals)**2))
+    ss_res = np.sum((all_preds - all_reals) ** 2)
+    ss_tot = np.sum((all_reals - np.mean(all_reals)) ** 2)
+    r2 = float("nan") if ss_tot <= 0 else 1.0 - (ss_res / ss_tot)
     
     print("\n" + "="*30)
     print(f"Final Test MAE: {mae:.4f} eV")
     print(f"Final Test RMSE: {rmse:.4f} eV")
+    print(f"Final Test R2: {r2:.4f}")
     print("="*30)
+
+    if args.metrics_out:
+        metrics_out = os.path.abspath(args.metrics_out)
+        os.makedirs(os.path.dirname(metrics_out), exist_ok=True)
+        payload = {
+            "mae": float(mae),
+            "rmse": float(rmse),
+            "r2": float(r2),
+            "n_test": int(len(test_set)),
+            "ckpt": os.path.abspath(args.ckpt),
+            "split_dir": os.path.abspath(args.split_dir) if args.split_dir else None,
+            "plot_path": os.path.abspath(args.plot_path),
+        }
+        with open(metrics_out, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print(f"Metrics saved to: {metrics_out}")
 
     plt.figure(figsize=(8, 8))
     plt.scatter(all_reals, all_preds, alpha=0.6, edgecolors='w', label=f'Model Predictions')

@@ -56,6 +56,22 @@ train_ratio = 0.0
 val_ratio = 0.0
 test_ratio = 0.0
 
+[baseline]
+split_version = "v1"
+
+[baseline.split]
+data = "WLY/final_dataset.pkl"
+output_root = "mainline/baseline/splits"
+manifest_root = "mainline/baseline/manifests"
+auto_generate = true
+seed = 42
+train_ratio = 0.8
+val_ratio = 0.1
+test_ratio = 0.1
+id_keys = ["id", "unique_id", "uid", "mp_id"]
+write_toy = true
+toy_size = 200
+
 [baseline.pull]
 root_dir = "mainline/baseline/third_party"
 depth = 1
@@ -75,3 +91,27 @@ dest = "alignn"
 [baseline.pull.ours]
 enabled = true
 path = "mainline"
+
+[baseline.models.ours]
+enabled = true
+split_version = "v1"
+train_output_dir = "WLY/checkpoints_baseline"
+eval_ckpt = "best_model.pth"
+plot_path = "mainline/baseline/reports/parity_ours_v1.png"
+metrics_out = "mainline/baseline/reports/metrics_ours_v1.json"
+
+[baseline.models.cgcnn]
+enabled = true
+workdir = "mainline/baseline/third_party/cgcnn"
+# Fill these command arrays with your real IMP2D training/eval commands.
+# Placeholders: {root}, {split_dir}, {split_version}
+train_cmd = []
+eval_cmd = []
+
+[baseline.models.alignn]
+enabled = true
+workdir = "mainline/baseline/third_party/alignn"
+# Fill these command arrays with your real IMP2D training/eval commands.
+# Placeholders: {root}, {split_dir}, {split_version}
+train_cmd = []
+eval_cmd = []

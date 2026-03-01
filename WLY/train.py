@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, Subset
 from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -12,6 +12,7 @@ import numpy as np
 from tqdm import tqdm
 import gc
 import argparse
+import json
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -44,6 +45,33 @@ def is_distributed():
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     return world_size > 1
 
+
+def load_locked_split(split_dir: str, total_size: int):
+    train_path = os.path.join(split_dir, "train_indices.json")
+    val_path = os.path.join(split_dir, "val_indices.json")
+    test_path = os.path.join(split_dir, "test_indices.json")
+
+    for p in (train_path, val_path, test_path):
+        if not os.path.exists(p):
+            raise FileNotFoundError(f"Missing split file: {p}")
+
+    with open(train_path, "r", encoding="utf-8") as f:
+        train_indices = [int(x) for x in json.load(f)]
+    with open(val_path, "r", encoding="utf-8") as f:
+        val_indices = [int(x) for x in json.load(f)]
+    with open(test_path, "r", encoding="utf-8") as f:
+        test_indices = [int(x) for x in json.load(f)]
+
+    all_indices = train_indices + val_indices + test_indices
+    if len(set(all_indices)) != len(all_indices):
+        raise ValueError(f"Overlap detected in split indices: {split_dir}")
+    if any((idx < 0 or idx >= total_size) for idx in all_indices):
+        raise ValueError(
+            f"Out-of-range index found in split files (dataset size={total_size})"
+        )
+
+    return train_indices, val_indices, test_indices
+
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser()
@@ -67,6 +95,11 @@ def main():
     parser.add_argument("--backend", default=None)
     parser.add_argument("--distributed", action="store_true")
     parser.add_argument("--fp16", action="store_true")
+    parser.add_argument(
+        "--split_dir",
+        default=None,
+        help="Directory containing train_indices.json/val_indices.json/test_indices.json",
+    )
     args = parser.parse_args()
 
     output_dir = args.output_dir
@@ -95,6 +128,7 @@ def main():
         "backend": args.backend,
         "distributed": args.distributed,
         "fp16": args.fp16,
+        "split_dir": args.split_dir,
     }
     
     os.makedirs(CONFIG["output_dir"], exist_ok=True)
@@ -141,11 +175,31 @@ def main():
         print(f"Target Norm Stats: Mean={normalizer.mean:.4f}, Std={normalizer.std:.4f}")
     
     total_size = len(full_dataset)
-    train_size = int(0.8 * total_size)
-    val_size = int(0.1 * total_size)
-    test_size = total_size - train_size - val_size
-    gen = torch.Generator().manual_seed(CONFIG["seed"])
-    train_set, val_set, test_set = random_split(full_dataset, [train_size, val_size, test_size], generator=gen)
+    if CONFIG["split_dir"]:
+        train_indices, val_indices, test_indices = load_locked_split(
+            CONFIG["split_dir"], total_size
+        )
+        train_set = Subset(full_dataset, train_indices)
+        val_set = Subset(full_dataset, val_indices)
+        test_set = Subset(full_dataset, test_indices)
+        if is_main:
+            print(
+                f"Using locked split from {CONFIG['split_dir']} "
+                f"(train={len(train_set)}, val={len(val_set)}, test={len(test_set)})"
+            )
+    else:
+        train_size = int(0.8 * total_size)
+        val_size = int(0.1 * total_size)
+        test_size = total_size - train_size - val_size
+        gen = torch.Generator().manual_seed(CONFIG["seed"])
+        train_set, val_set, test_set = random_split(
+            full_dataset, [train_size, val_size, test_size], generator=gen
+        )
+        if is_main:
+            print(
+                f"Using random split by seed={CONFIG['seed']} "
+                f"(train={len(train_set)}, val={len(val_set)}, test={len(test_set)})"
+            )
 
     pin_memory = bool(CONFIG["pin_memory"]) or (device.type == "cuda")
     persistent_workers = bool(CONFIG["persistent_workers"]) and CONFIG["num_workers"] > 0

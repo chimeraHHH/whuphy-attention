@@ -34,6 +34,19 @@ Pull baseline ladder sources (CGCNN / ALIGNN / Ours):
 python mainline/run.py --stage pull_baselines --baseline all
 ```
 
+Generate locked split artifacts (`80/10/10` with fixed seed):
+
+```bash
+python mainline/run.py --stage split_lock --split_version v1
+```
+
+Unified baseline orchestration:
+
+```bash
+python mainline/run.py --stage baseline --baseline train --baseline_model all --split_version v1
+python mainline/run.py --stage baseline --baseline eval --baseline_model all --split_version v1
+```
+
 Run only Matformer training:
 
 ```bash
