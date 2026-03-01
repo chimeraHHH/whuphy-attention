@@ -17,6 +17,7 @@ python mainline/run.py --stage all --target both
 Useful options:
 
 ```bash
+python mainline/run.py --stage pull_baselines --baseline all
 python mainline/run.py --stage preprocess --target wly
 python mainline/run.py --stage train --target matformer
 python mainline/run.py --config mainline/config.toml --stage train --target wly

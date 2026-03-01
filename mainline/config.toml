@@ -55,3 +55,23 @@ fermi_bin_idx = -1
 train_ratio = 0.0
 val_ratio = 0.0
 test_ratio = 0.0
+
+[baseline.pull]
+root_dir = "mainline/baseline/third_party"
+depth = 1
+
+[baseline.pull.cgcnn]
+enabled = true
+repo = "https://github.com/txie-93/cgcnn.git"
+branch = "master"
+dest = "cgcnn"
+
+[baseline.pull.alignn]
+enabled = true
+repo = "https://github.com/usnistgov/alignn.git"
+branch = "main"
+dest = "alignn"
+
+[baseline.pull.ours]
+enabled = true
+path = "mainline"

@@ -28,6 +28,12 @@ Run only data preprocessing:
 python mainline/run.py --stage preprocess --target wly
 ```
 
+Pull baseline ladder sources (CGCNN / ALIGNN / Ours):
+
+```bash
+python mainline/run.py --stage pull_baselines --baseline all
+```
+
 Run only Matformer training:
 
 ```bash
