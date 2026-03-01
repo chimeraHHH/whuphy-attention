@@ -1,0 +1,57 @@
+[paths]
+python = "python"
+wly_dir = "WLY"
+matformer_dir = "Matformer-1"
+
+[wly.preprocess]
+input_dir = "dataset_imp2d"
+cleaned_output = "cleaned_dataset.pkl"
+processed_output = "processed_dataset_with_graphs.pkl"
+final_output = "final_dataset.pkl"
+cutoff = 5.0
+min_target = -20.0
+max_target = 20.0
+# set to 0 or negative to disable limit
+limit = 0
+
+[wly.train]
+enabled = true
+data = "final_dataset.pkl"
+features = "atom_features.pth"
+output_dir = "checkpoints"
+batch_size = 16
+epochs = 25
+lr = 0.0001
+hidden_dim = 64
+n_local = 2
+n_global = 1
+seed = 42
+num_workers = 0
+pin_memory = false
+fp16 = false
+distributed = false
+backend = "nccl"
+
+[matformer.train]
+enabled = false
+task = "both"
+epochs = 200
+batch_size = 64
+lr = 0.001
+cutoff = 8.0
+max_neighbors = 12
+num_workers = 4
+output_root = "runs_mainline"
+link = "identity"
+seed = 123
+no_lattice = false
+use_angle = false
+weighted_loss = false
+per_bin_standardize = false
+# optional: set to positive values to enable
+fermi_sigma = 0.0
+fermi_bin_idx = -1
+# optional subset ratios: set to > 0 to enable
+train_ratio = 0.0
+val_ratio = 0.0
+test_ratio = 0.0

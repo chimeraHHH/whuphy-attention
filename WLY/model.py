@@ -308,8 +308,9 @@ if __name__ == "__main__":
     
     from WLY.data_loader import CrystalGraphDataset, DataLoader, collate_fn
     
-    DATA_PATH = '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/cleaned_dataset.pkl'
-    FEATURE_PATH = '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/atom_features.pth'
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    DATA_PATH = os.path.join(base_dir, "cleaned_dataset.pkl")
+    FEATURE_PATH = os.path.join(base_dir, "atom_features.pth")
     
     dataset = CrystalGraphDataset(DATA_PATH, FEATURE_PATH)
     loader = DataLoader(dataset, batch_size=2, shuffle=True, collate_fn=collate_fn)

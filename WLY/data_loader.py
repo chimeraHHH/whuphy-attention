@@ -200,8 +200,9 @@ def collate_fn(batch):
 
 if __name__ == "__main__":
     # Test the DataLoader
-    DATA_PATH = '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/cleaned_dataset.pkl'
-    FEATURE_PATH = '/Users/wuleyan/Desktop/dachuang/whuphy-attention/WLY/atom_features.pth'
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    DATA_PATH = os.path.join(base_dir, "cleaned_dataset.pkl")
+    FEATURE_PATH = os.path.join(base_dir, "atom_features.pth")
     
     try:
         dataset = CrystalGraphDataset(DATA_PATH, FEATURE_PATH)

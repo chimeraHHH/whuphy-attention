@@ -1,5 +1,19 @@
 # WLY（CrystalTransformer）运行说明（Windows/超算）
 
+## 主干统一入口（推荐）
+
+从仓库根目录运行：
+
+```bash
+python mainline/run.py --stage all --target both
+```
+
+仅做 WLY 数据预处理：
+
+```bash
+python mainline/run.py --stage preprocess --target wly
+```
+
 ## 目录里已有的数据
 - `dataset_imp2d/*.pt`：训练目标是 `y=eform`（formation energy），可直接作为数据源
 - `atom_features.pth`：原子特征查表（训练默认使用）
