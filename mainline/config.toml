@@ -103,15 +103,55 @@ metrics_out = "mainline/baseline/reports/metrics_ours_v1.json"
 [baseline.models.cgcnn]
 enabled = true
 workdir = "mainline/baseline/third_party/cgcnn"
-# Fill these command arrays with your real IMP2D training/eval commands.
-# Placeholders: {root}, {split_dir}, {split_version}
-train_cmd = []
-eval_cmd = []
+train_cmd = [
+  "python",
+  "{root}/mainline/baseline/baseline_runner.py",
+  "--model",
+  "cgcnn",
+  "--action",
+  "train",
+  "--split_dir",
+  "{split_dir}",
+  "--split_version",
+  "{split_version}"
+]
+eval_cmd = [
+  "python",
+  "{root}/mainline/baseline/baseline_runner.py",
+  "--model",
+  "cgcnn",
+  "--action",
+  "eval",
+  "--split_dir",
+  "{split_dir}",
+  "--split_version",
+  "{split_version}"
+]
 
 [baseline.models.alignn]
 enabled = true
 workdir = "mainline/baseline/third_party/alignn"
-# Fill these command arrays with your real IMP2D training/eval commands.
-# Placeholders: {root}, {split_dir}, {split_version}
-train_cmd = []
-eval_cmd = []
+train_cmd = [
+  "python",
+  "{root}/mainline/baseline/baseline_runner.py",
+  "--model",
+  "alignn",
+  "--action",
+  "train",
+  "--split_dir",
+  "{split_dir}",
+  "--split_version",
+  "{split_version}"
+]
+eval_cmd = [
+  "python",
+  "{root}/mainline/baseline/baseline_runner.py",
+  "--model",
+  "alignn",
+  "--action",
+  "eval",
+  "--split_dir",
+  "{split_dir}",
+  "--split_version",
+  "{split_version}"
+]

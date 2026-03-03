@@ -8,9 +8,13 @@ import pickle
 import random
 import subprocess
 import sys
-import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 
 ROOT = Path(__file__).resolve().parent.parent
