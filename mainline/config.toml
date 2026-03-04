@@ -113,7 +113,9 @@ train_cmd = [
   "--split_dir",
   "{split_dir}",
   "--split_version",
-  "{split_version}"
+  "{split_version}",
+  "--cgcnn_epochs",
+  "{cgcnn_epochs}"
 ]
 eval_cmd = [
   "python",
@@ -141,7 +143,9 @@ train_cmd = [
   "--split_dir",
   "{split_dir}",
   "--split_version",
-  "{split_version}"
+  "{split_version}",
+  "--alignn_epochs",
+  "{alignn_epochs}"
 ]
 eval_cmd = [
   "python",

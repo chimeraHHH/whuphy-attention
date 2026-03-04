@@ -20,7 +20,7 @@ def _run(cmd: list[str], cwd: Path) -> None:
     subprocess.run(cmd, cwd=str(cwd), check=True)
 
 
-def _prepare(split_dir: Path, split_version: str) -> None:
+def _prepare(split_dir: Path, split_version: str, alignn_epochs: int) -> None:
     cmd = [
         sys.executable,
         str(ROOT / "mainline" / "baseline" / "prepare_imp2d_baseline_data.py"),
@@ -32,11 +32,13 @@ def _prepare(split_dir: Path, split_version: str) -> None:
         str(split_dir),
         "--split_version",
         split_version,
+        "--alignn_epochs",
+        str(int(alignn_epochs)),
     ]
     _run(cmd, ROOT)
 
 
-def _run_cgcnn(action: str, split_dir: Path, split_version: str) -> None:
+def _run_cgcnn(action: str, split_dir: Path, split_version: str, cgcnn_epochs: int) -> None:
     output_dir = ROOT / "mainline" / "baseline" / "runs" / f"cgcnn_{split_version}"
     cmd = [
         sys.executable,
@@ -60,9 +62,13 @@ def _run_cgcnn(action: str, split_dir: Path, split_version: str) -> None:
         "--optimizer",
         "Adam",
         "--epochs",
-        "200",
+        str(int(cgcnn_epochs)),
         "--seed",
         "123",
+        "--radius",
+        "10.0",
+        "--max_num_nbr",
+        "16",
     ]
     _run(cmd, ROOT)
 
@@ -71,7 +77,8 @@ def _run_alignn_train(split_version: str) -> None:
     alignn_workdir = ROOT / "mainline" / "baseline" / "third_party" / "alignn"
     cmd = [
         sys.executable,
-        "alignn/train_alignn.py",
+        "-m",
+        "alignn.train_alignn",
         "--root_dir",
         str(ROOT / "mainline" / "baseline" / "datasets" / f"imp2d_{split_version}" / "alignn"),
         "--config_name",
@@ -117,18 +124,20 @@ def main() -> None:
     parser.add_argument("--action", choices=["train", "eval"], required=True)
     parser.add_argument("--split_dir", required=True)
     parser.add_argument("--split_version", required=True)
+    parser.add_argument("--cgcnn_epochs", type=int, default=200)
+    parser.add_argument("--alignn_epochs", type=int, default=300)
     args = parser.parse_args()
 
     split_dir = _resolve(args.split_dir)
 
-    if args.action == "train":
-        _prepare(split_dir, args.split_version)
-
     if args.model == "cgcnn":
-        _run_cgcnn(args.action, split_dir, args.split_version)
+        if args.action == "train":
+            _prepare(split_dir, args.split_version, args.alignn_epochs)
+        _run_cgcnn(args.action, split_dir, args.split_version, args.cgcnn_epochs)
         return
     if args.model == "alignn":
         if args.action == "train":
+            _prepare(split_dir, args.split_version, args.alignn_epochs)
             _run_alignn_train(args.split_version)
         else:
             _run_alignn_eval(args.split_version)

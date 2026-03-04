@@ -4,22 +4,34 @@ import argparse
 import csv
 import json
 import random
+import sys
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn import metrics
+try:
+    from sklearn import metrics
+except ModuleNotFoundError:
+    metrics = None
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from mainline.baseline.third_party.cgcnn.cgcnn.data import CIFData, collate_pool
-from mainline.baseline.third_party.cgcnn.cgcnn.model import CrystalGraphConvNet
-
-
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+try:
+    from mainline.baseline.third_party.cgcnn.cgcnn.data import CIFData, collate_pool
+    from mainline.baseline.third_party.cgcnn.cgcnn.model import CrystalGraphConvNet
+except ModuleNotFoundError:
+    third_party_root = ROOT / "mainline" / "baseline" / "third_party" / "cgcnn"
+    if str(third_party_root) not in sys.path:
+        sys.path.insert(0, str(third_party_root))
+    from cgcnn.data import CIFData, collate_pool
+    from cgcnn.model import CrystalGraphConvNet
 
 
 def _resolve(path_str: str) -> Path:
@@ -68,6 +80,8 @@ def mae(prediction: torch.Tensor, target: torch.Tensor) -> float:
 
 
 def class_eval(prediction: torch.Tensor, target: torch.Tensor) -> tuple[float, float, float, float, float]:
+    if metrics is None:
+        raise ModuleNotFoundError("scikit-learn is required for classification task.")
     prediction = np.exp(prediction.numpy())
     target = target.numpy()
     pred_label = np.argmax(prediction, axis=1)
@@ -107,8 +121,27 @@ def _dataset_index_map(dataset: CIFData) -> dict[str, int]:
     for idx, row in enumerate(dataset.id_prop_data):
         if len(row) < 1:
             continue
-        out[str(row[0])] = idx
+        key = str(row[0])
+        out[key] = idx
+        if key.endswith(".cif"):
+            out[key[:-4]] = idx
+        if key.startswith("structures/"):
+            out[key[len("structures/") :]] = idx
     return out
+
+
+def _resolve_index(idx_map: dict[str, int], mapped_id: str) -> int | None:
+    mid = str(mapped_id)
+    candidates = [
+        mid,
+        f"structures/{mid}",
+        f"structures/{mid}.cif",
+        f"{mid}.cif",
+    ]
+    for cand in candidates:
+        if cand in idx_map:
+            return idx_map[cand]
+    return None
 
 
 def _make_loader(
@@ -301,16 +334,20 @@ def main() -> None:
 
     id_map = _load_id_mapping(mapping_json)
     train_ids, val_ids, test_ids = _load_split_ids(split_dir)
-    mapped_train = [id_map[x] for x in train_ids]
-    mapped_val = [id_map[x] for x in val_ids]
-    mapped_test = [id_map[x] for x in test_ids]
+    mapped_train = [id_map[x] for x in train_ids if x in id_map]
+    mapped_val = [id_map[x] for x in val_ids if x in id_map]
+    mapped_test = [id_map[x] for x in test_ids if x in id_map]
 
     idx_map = _dataset_index_map(dataset)
-    train_idx = [idx_map[x] for x in mapped_train if x in idx_map]
-    val_idx = [idx_map[x] for x in mapped_val if x in idx_map]
-    test_idx = [idx_map[x] for x in mapped_test if x in idx_map]
+    train_idx = [x for x in (_resolve_index(idx_map, mid) for mid in mapped_train) if x is not None]
+    val_idx = [x for x in (_resolve_index(idx_map, mid) for mid in mapped_val) if x is not None]
+    test_idx = [x for x in (_resolve_index(idx_map, mid) for mid in mapped_test) if x is not None]
     if not train_idx or not val_idx or not test_idx:
-        raise ValueError("Mapped split indices are empty; check mapping and dataset.")
+        raise ValueError(
+            "Mapped split indices are empty; "
+            f"mapped_ids(train/val/test)=({len(mapped_train)}/{len(mapped_val)}/{len(mapped_test)}), "
+            f"resolved_indices=({len(train_idx)}/{len(val_idx)}/{len(test_idx)})."
+        )
 
     train_loader = _make_loader(dataset, train_idx, args.batch_size, args.workers, cuda, True)
     val_loader = _make_loader(dataset, val_idx, args.batch_size, args.workers, cuda, False)

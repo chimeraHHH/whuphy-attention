@@ -441,6 +441,8 @@ def run_external_baseline(
     name: str,
     action: str,
     split_version: str,
+    cgcnn_epochs: int,
+    alignn_epochs: int,
 ) -> None:
     model_cfg = cfg["baseline"]["models"][name]
     if not bool(model_cfg.get("enabled", True)):
@@ -461,13 +463,23 @@ def run_external_baseline(
         "root": str(ROOT),
         "split_dir": str(split_dir),
         "split_version": split_version,
+        "cgcnn_epochs": str(int(cgcnn_epochs)),
+        "alignn_epochs": str(int(alignn_epochs)),
     }
     formatted_cmd = [str(part).format(**replacements) for part in cmd]
     workdir = _resolve_path(str(model_cfg.get("workdir", ".")))
     run_cmd(formatted_cmd, workdir)
 
 
-def run_baseline(cfg: dict, *, action: str, model_selector: str, split_version: str) -> None:
+def run_baseline(
+    cfg: dict,
+    *,
+    action: str,
+    model_selector: str,
+    split_version: str,
+    cgcnn_epochs: int,
+    alignn_epochs: int,
+) -> None:
     if action not in BASELINE_ACTIONS:
         raise ValueError(
             f"Unknown baseline action '{action}'. "
@@ -486,7 +498,14 @@ def run_baseline(cfg: dict, *, action: str, model_selector: str, split_version: 
             elif action == "eval":
                 run_ours_baseline_eval(cfg, split_version)
             continue
-        run_external_baseline(cfg, name=name, action=action, split_version=split_version)
+        run_external_baseline(
+            cfg,
+            name=name,
+            action=action,
+            split_version=split_version,
+            cgcnn_epochs=cgcnn_epochs,
+            alignn_epochs=alignn_epochs,
+        )
 
 
 def run_matformer_train(cfg: dict) -> None:
@@ -589,6 +608,8 @@ def main() -> None:
         default="",
         help="Split-lock version, e.g. v1. Defaults to baseline.split_version in config.",
     )
+    parser.add_argument("--cgcnn_epochs", type=int, default=200)
+    parser.add_argument("--alignn_epochs", type=int, default=300)
     args = parser.parse_args()
 
     cfg_path = Path(args.config).resolve()
@@ -613,6 +634,8 @@ def main() -> None:
             action=action,
             model_selector=args.baseline_model.lower(),
             split_version=split_version,
+            cgcnn_epochs=args.cgcnn_epochs,
+            alignn_epochs=args.alignn_epochs,
         )
         return
 
