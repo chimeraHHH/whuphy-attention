@@ -115,7 +115,9 @@ train_cmd = [
   "--split_version",
   "{split_version}",
   "--cgcnn_epochs",
-  "{cgcnn_epochs}"
+  "{cgcnn_epochs}",
+  "--alignn_epochs",
+  "{alignn_epochs}"
 ]
 eval_cmd = [
   "python",
